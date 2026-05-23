@@ -1,0 +1,53 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code from repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js for testing
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Install dependencies and run tests
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+
+      # 4. Login to DockerHub
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 5. Build Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/todo-app:latest .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/todo-app:${{ github.sha }} .
+
+      # 6. Push Docker image to DockerHub
+      - name: Push Docker Image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/todo-app:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/todo-app:${{ github.sha }}
+
+      # 7. Trigger Render deployment via webhook
+      - name: Trigger Render Deployment
+        run: |
+          curl -f -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
